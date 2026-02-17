@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: mini-finance-app
+    namespace: mini-finance-dev
+    labels:
+        app: mini-finance-app
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            app: mini-finance-app
+    template:
+        metadata:
+            labels:
+                app: mini-finance-app
+        spec:
+            containers:
+                - name: mini-finance-app
+                  image: lakunzy/mini-finance-app:latest
+                  imagePullPolicy: IfNotPresent
+                  ports:
+                      - containerPort: 80
+                  resources:
+                      requests:
+                          memory: "64Mi"
+                          cpu: "50m"
+                      limits:
+                          memory: "128Mi"
+                          cpu: "100m"
+                  readinessProbe:
+                      httpGet:
+                          path: /index.html
+                          port: 80
+                      initialDelaySeconds: 5
+                      periodSeconds: 5
+                  livenessProbe:
+                      httpGet:
+                          path: /index.html
+                          port: 80
+                      initialDelaySeconds: 15
+                      periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: mini-finance-app-service
+    namespace: mini-finance-dev
+spec:
+    selector:
+        app: mini-finance-app
+    ports:
+        - protocol: TCP
+          port: 80
+          targetPort: 80
+    type: ClusterIP
