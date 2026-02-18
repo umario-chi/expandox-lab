@@ -1,111 +1,190 @@
-# DevOps Platform Deployment Guide (Local First)
+# Payday Platform: GitOps Deployment Guide
 
-This guide provides a step-by-step walkthrough for deploying the platform on a local machine using Kind, and prepares for a future transition to a cloud environment.
+This document provides a step-by-step guide to deploying the `mini-finance-app` using a declarative GitOps workflow powered by Argo CD. This setup mirrors the clean, simple, and declarative approach demonstrated in the `daascohort3` learning modules.
 
-## Prerequisites (Local)
+---
+
+### **Core Principles**
+
+*   **Git is the Source of Truth:** All configurations, including Kubernetes manifests and Argo CD applications, are stored in this Git repository.
+*   **Declarative:** We define the *desired state* of our application in YAML files, and Argo CD makes the cluster match that state.
+*   **Automated:** Changes are automatically synchronized to the cluster after they are pushed to the correct Git branch.
+
+---
+
+## **1. Prerequisites**
 
 Before you begin, ensure you have the following tools installed and configured:
-- `git`
-- `docker`
-- `terraform` (v1.x)
-- `kubectl` (v1.2x)
-- `kind` (v0.11+)
+
+1.  **`kubectl`**: Connected to a running Kubernetes cluster.
+    *   *This guide assumes you are using a local `kind` cluster named `mini-fin-cluster`.*
+2.  **Docker**: Running locally to build and push the application image.
+3.  **Git**: Configured with your user credentials.
+4.  **Docker Hub Account**: You will need your username and a Personal Access Token to push a private image.
 
 ---
 
-## Stage 1: Version Control Setup
+## **2. One-Time Cluster Setup**
 
-(This stage remains the same as the original guide, focused on setting up your Git repositories.)
+These steps only need to be performed once to prepare your Kubernetes cluster.
 
----
+### **Step 2.1: Install Argo CD**
 
-## Stage 2: Infrastructure Provisioning (Local with Kind)
+First, create a dedicated namespace for Argo CD and install the latest stable version.
 
-Next, create the local Kubernetes cluster using the `terraform-local` configuration.
+```bash
+# Create the namespace
+kubectl create namespace argocd
 
-1.  **Navigate to the Local Terraform Directory:**
-    ```bash
-    cd DevOps-Project-1/terraform-local
-    ```
+# Apply the stable Argo CD installation manifest
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+```
 
-2.  **Deploy the Kind Cluster:**
-    ```bash
-    terraform init
-    terraform apply --auto-approve
-    ```
-    - This command will use the Terraform Kind provider to create a local Kubernetes cluster named `devops-cluster`. The `kubeconfig` will be automatically set up.
+### **Step 2.2: Add Your Git Repository to Argo CD**
 
-3.  **Verify Cluster Connection:**
-    ```bash
-    kubectl cluster-info --context kind-devops-cluster
-    ```
+Register your public Git repository with Argo CD by applying a declarative manifest. This allows Argo CD to access your configuration files.
+
+```bash
+kubectl apply -f DevOps-Project-1/gitops/v2-add-cluster-and-repo/add-public-repo.yaml
+```
 
 ---
 
-## Stage 3: Deploy Your First Application (Local)
+## **3. Application Deployment Workflow**
 
-With the local cluster running, deploy the `mini-finance-app`.
+This is the main workflow for deploying the `mini-finance-app`.
 
-1.  **Build the Docker Image:**
-    From the root of the `DevOps-Project-1` directory, build the application's Docker image.
-    ```bash
-    docker build -t mini-finance-app:local ./mini-finance-app
-    ```
+### **Step 3.1: Build and Push the Docker Image**
 
-2.  **Load the Image into Your Kind Cluster:**
-    The local cluster does not have access to your machine's Docker images by default. Load the image into the cluster:
-    ```bash
-    kind load docker-image mini-finance-app:local --name devops-cluster
-    ```
+The application is a static website served by Nginx. We need to build the container image and push it to a registry (Docker Hub).
 
-3.  **Deploy the Application:**
-    Apply the Kubernetes manifests to deploy the application to your cluster.
-    ```bash
-    kubectl apply -f ./mini-finance-app/k8s/
-    ```
+```bash
+# 1. Navigate to the application's source directory
+cd DevOps-Project-1/mini-finance-app
 
-4.  **Verify the Deployment:**
-    Check that the pod is running:
-    ```bash
-    kubectl get pods
-    ```
-    You should see a pod named `mini-finance-app-deployment-...` with a status of `Running`.
+# 2. Build the Docker image
+# Replace 'lakunzy' with your Docker Hub username if different
+docker build -t lakunzy/mini-finance-app:latest .
 
-5.  **Access the Application:**
-    To access the application from your local machine, forward a local port to the service:
-    ```bash
-    kubectl port-forward svc/mini-finance-app-service 8080:80
-    ```
-    You can now access the application at `http://localhost:8080` in your web browser.
+# 3. Log in to Docker Hub (use an Access Token for the password)
+docker login
+
+# 4. Push the image to the registry
+docker push lakunzy/mini-finance-app:latest
+```
+
+### **Step 3.2: Create the Image Pull Secret**
+
+Since the image is private, we must provide Kubernetes with the credentials to pull it from Docker Hub.
+
+*   **Note:** You only need to do this once per namespace.
+
+```bash
+# Create the secret for the 'dev' environment
+kubectl create secret docker-registry dockerhub-creds \
+  --docker-server=https://index.docker.io/v1/ \
+  --docker-username=<your-docker-username> \
+  --docker-password=<your-docker-hub-token> \
+  --namespace=mini-finance-dev
+
+# Create the secret for the 'production' environment
+kubectl create secret docker-registry dockerhub-creds \
+  --docker-server=https://index.docker.io/v1/ \
+  --docker-username=<your-docker-username> \
+  --docker-password=<your-docker-hub-token> \
+  --namespace=mini-finance-prod
+```
+
+### **Step 3.3: Define the Application Project**
+
+Apply the `AppProject` manifest. This logically groups our finance applications within Argo CD and sets governance rules.
+
+```bash
+kubectl apply -f DevOps-Project-1/gitops/v5-app-project/app-project.yaml
+```
+
+### **Step 3.4: Deploy with the ApplicationSet**
+
+This is the final step. Apply the `ApplicationSet` manifest. This single file tells Argo CD to create and manage the applications for **both** your `dev` and `production` environments automatically.
+
+```bash
+kubectl apply -f DevOps-Project-1/gitops/v6-application-sets/appset.yaml
+```
+
+Argo CD will now automatically:
+1.  Create the `mini-finance-dev` and `mini-finance-prod` namespaces.
+2.  Read the manifests from `DevOps-Project-1/k8s/dev` and `DevOps-Project-1/k8s/production`.
+3.  Deploy the resources (Deployment, Service, etc.) into the respective namespaces.
 
 ---
-## Stage 4: Transitioning to a Cloud Deployment (Future)
 
-When you are ready to deploy to a cloud provider like GCP or AWS, you will need to make the following changes:
+## **4. Verifying the Deployment**
 
-1.  **Infrastructure Provisioning:**
-    - Use the configurations in `terraform/environments/staging` or `terraform/environments/production`.
-    - You will need to configure `main.tf` with your cloud project details (e.g., GCP Project ID).
-    - Run `terraform apply` in that directory to provision a GKE or EKS cluster.
+### **Check Argo CD**
 
-2.  **Container Registry:**
-    - You will need a container registry (like Google Artifact Registry, Amazon ECR, or Docker Hub) to store your application images.
-    - Your CI/CD pipeline will be configured to push images to this registry.
+Check the Argo CD UI or use the CLI to see the status of your newly created applications.
 
-3.  **CI/CD Pipeline (`.github/workflows/ci.yml`):**
-    - The pipeline will need to be updated to:
-        - Authenticate with your cloud provider.
-        - Build and push the Docker image to your container registry with a unique tag (e.g., the Git commit SHA).
-        - Update the image tag in your Kubernetes manifests (likely in the `config-repo` for GitOps).
+```bash
+# List the applications created by the ApplicationSet
+kubectl get applications -n argocd
+```
+You should see `mini-finance-dev` and `mini-finance-production`, and their status should eventually become `Healthy` and `Synced`.
 
-4.  **Kubernetes Manifests:**
-    - The `image` field in `deployment.yaml` will need to be changed from `mini-finance-app:local` to the path of the image in your container registry (e.g., `gcr.io/your-project/mini-finance-app:latest`).
-    - The `imagePullPolicy` might be changed from `IfNotPresent` to `Always` to ensure the latest image is pulled.
+### **Check the Pods**
 
-5.  **Argo CD:**
-    - Instead of applying manifests directly with `kubectl`, you will use Argo CD to manage deployments via GitOps, as described in the original guide.
+Verify that the application pods are running in their respective namespaces.
+
+```bash
+# Check the dev environment
+kubectl get pods -n mini-finance-dev
+
+# Check the production environment
+kubectl get pods -n mini-finance-prod
+```
+The status should be `Running`. If it shows `ImagePullBackOff`, it means the image pull secret is incorrect or was not created.
+
+### **Access the Application**
+
+Use `port-forward` to access the running application from your local machine.
+
+```bash
+# Access the dev environment on http://localhost:8080
+kubectl port-forward svc/mini-finance-app-service -n mini-finance-dev 8080:80
+
+# Access the production environment on http://localhost:8081
+kubectl port-forward svc/mini-finance-app-service -n mini-finance-prod 8081:80
+```
 
 ---
 
-(The original stages for Observability, Security, and CI/CD with Argo CD are still relevant and can be adapted for both local and cloud environments.)
+## **5. Making Changes (The GitOps Way)**
 
+To make any change—whether it's updating the image tag, changing the number of replicas, or modifying a config map—**you must update the YAML files in Git.**
+
+1.  **Edit** the relevant manifest file in the `DevOps-Project-1/k8s/` directory.
+2.  **Commit** the change with a descriptive message: `git commit -m "feat: increase production replicas to 4"`.
+3.  **Push** the change to the repository: `git push origin main`.
+
+Argo CD will detect the change and automatically synchronize the cluster to match the new state defined in Git.
+
+---
+
+## **6. Future Integrations (Coming Soon)**
+
+This guide provides the foundation for a robust GitOps deployment. The following components will be integrated in the future.
+
+### **Observability (Planned)**
+
+*   **Metrics:** Prometheus will be installed to scrape metrics from the application and cluster components.
+*   **Dashboards:** Grafana will be used to create dashboards for visualizing application health, performance, and SLOs.
+*   **Logging:** A centralized logging stack (like Loki or the ELK stack) will be configured to aggregate logs from all pods.
+
+*This section will be updated with instructions on how to configure and view observability data.*
+
+### **Security (Planned)**
+
+*   **Vulnerability Scanning:** The CI/CD pipeline will be enhanced to scan container images for vulnerabilities before they are pushed to the registry.
+*   **Policy Enforcement:** Tools like Kyverno or OPA Gatekeeper will be integrated to enforce security policies on all manifests before they are applied to the cluster.
+*   **Network Policies:** Stricter `NetworkPolicy` manifests will be added to limit communication between pods, following the principle of least privilege.
+
+*This section will be updated with details on security configurations and best practices.*
