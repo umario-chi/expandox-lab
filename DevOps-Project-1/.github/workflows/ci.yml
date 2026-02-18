@@ -1,0 +1,69 @@
+name: CI - Build, Push, and Update Manifests
+
+on:
+  push:
+    branches:
+      - '**' # This triggers the workflow on a push to any branch
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          # We need to fetch all history and branches for the git operations
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Login to Docker Hub
+        # Only log in if we are on the main or develop branch, as we only push from these
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and Push Image
+        id: docker_build
+        uses: docker/build-push-action@v4
+        with:
+          context: ./DevOps-Project-1/mini-finance-app
+          # Only push if it's the main or develop branch
+          push: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' }}
+          tags: |
+            lakunzy/mini-finance-app:${{ github.sha }}
+            lakunzy/mini-finance-app:latest
+          # For other branches (features), this step will just build the image for validation
+
+      - name: Update Production Manifest
+        if: github.ref == 'refs/heads/main'
+        run: |
+          # Configure Git
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+          # Update the image tag in the production manifest
+          sed -i "s|image:.*|image: lakunzy/mini-finance-app:${{ github.sha }}|g" DevOps-Project-1/k8s/production/manifests.yaml
+
+          # Commit and push the change
+          git add DevOps-Project-1/k8s/production/manifests.yaml
+          git commit -m "ci: update production image tag to ${{ github.sha }}" || echo "No changes to commit"
+          git push
+
+      - name: Update Development Manifest
+        if: github.ref == 'refs/heads/develop'
+        run: |
+          # Configure Git
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+          # Update the image tag in the development manifest
+          sed -i "s|image:.*|image: lakunzy/mini-finance-app:${{ github.sha }}|g" DevOps-Project-1/k8s/dev/manifests.yaml
+
+          # Commit and push the change
+          git add DevOps-Project-1/k8s/dev/manifests.yaml
+          git commit -m "ci: update dev image tag to ${{ github.sha }}" || echo "No changes to commit"
+          git push
