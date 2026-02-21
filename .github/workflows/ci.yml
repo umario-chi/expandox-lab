@@ -69,7 +69,6 @@ jobs:
           git commit -m "ci: update dev image tag to ${{ github.sha }}" || echo "No changes to commit"
           git push
 
-          #dfgdfg
 
 
           
