@@ -34,8 +34,8 @@ jobs:
           # Only push if it's the main or develop branch
           push: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' }}
           tags: |
-            lakunzy/mini-finance-app:${{ github.sha }}
-            lakunzy/mini-finance-app:latest
+            umario0ps/mini-finance-app:${{ github.sha }}
+            umario0ps/mini-finance-app:latest
           # For other branches (features), this step will just build the image for validation
 
       - name: Update Production Manifest
@@ -46,7 +46,7 @@ jobs:
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 
           # Update the image tag in the production manifest
-          sed -i "s|image:.*|image: lakunzy/mini-finance-app:${{ github.sha }}|g" DevOps-Project-1/k8s/production/manifests.yaml
+          sed -i "s|image:.*|image: umario0ps/mini-finance-app:${{ github.sha }}|g" DevOps-Project-1/k8s/production/manifests.yaml
 
           # Commit and push the change
           git add DevOps-Project-1/k8s/production/manifests.yaml
@@ -61,7 +61,7 @@ jobs:
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 
           # Update the image tag in the development manifest
-          sed -i "s|image:.*|image: lakunzy/mini-finance-app:${{ github.sha }}|g" DevOps-Project-1/k8s/dev/manifests.yaml
+          sed -i "s|image:.*|image: umario0ps/mini-finance-app:${{ github.sha }}|g" DevOps-Project-1/k8s/dev/manifests.yaml
 
           # Commit and push the change
           git add DevOps-Project-1/k8s/dev/manifests.yaml
