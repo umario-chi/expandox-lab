@@ -68,3 +68,5 @@ jobs:
           git add DevOps-Project-1/k8s/dev/manifests.yaml
           git commit -m "ci: update dev image tag to ${{ github.sha }}" || echo "No changes to commit"
           git push
+
+          # ffffff
