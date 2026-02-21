@@ -37,7 +37,7 @@ spec:
                 - name: dockerhub-creds
             containers:
                 - name: mini-finance-app
-                  image: lakunzy/mini-finance-app:latest
+                  image: umario0ps/mini-finance-app:6873499b69527a34279b1f5d6a6af02923c676f1
                   imagePullPolicy: IfNotPresent
                   ports:
                       - containerPort: 80
