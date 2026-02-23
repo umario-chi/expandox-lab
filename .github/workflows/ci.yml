@@ -25,7 +25,7 @@ jobs:
               uses: docker/login-action@v2
               with:
                   username: ${{ secrets.DOCKER_USERNAME }}
-                  password: ${{ secrets.DOCKERHUB_TOKEN }}
+                  password: ${{ secrets.DOCKERHUB_PASSWORD }}
 
             - name: Build and Push Image
               id: docker_build
@@ -34,8 +34,8 @@ jobs:
                   context: ./DevOps-Project-1/mini-finance-app
                   push: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' }}
                   tags: |
-                      lakunzy/mini-finance-app:${{ github.sha }}
-                      lakunzy/mini-finance-app:latest
+                      umario0ps/mini-finance-app:${{ github.sha }}
+                      umario0ps/mini-finance-app:latest
 
             - name: Update Production Manifest
               if: github.ref == 'refs/heads/main'
@@ -44,7 +44,7 @@ jobs:
               run: |
                   git config --global user.name 'github-actions[bot]'
                   git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-                  sed -i "s|image:.*|image: lakunzy/mini-finance-app:${{ github.sha }}|g" DevOps-Project-1/k8s/production/manifests.yaml
+                  sed -i "s|image:.*|image: umario0ps/mini-finance-app:${{ github.sha }}|g" DevOps-Project-1/k8s/production/manifests.yaml
                   git add DevOps-Project-1/k8s/production/manifests.yaml
                   git commit -m "ci: update production image tag to ${{ github.sha }}" || echo "No changes to commit"
                   git push https://${{ github.actor }}:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git HEAD:main
@@ -56,7 +56,7 @@ jobs:
               run: |
                   git config --global user.name 'github-actions[bot]'
                   git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-                  sed -i "s|image:.*|image: lakunzy/mini-finance-app:${{ github.sha }}|g" DevOps-Project-1/k8s/dev/manifests.yaml
+                  sed -i "s|image:.*|image: umario0ps/mini-finance-app:${{ github.sha }}|g" DevOps-Project-1/k8s/dev/manifests.yaml
                   git add DevOps-Project-1/k8s/dev/manifests.yaml
                   git commit -m "ci: update dev image tag to ${{ github.sha }}" || echo "No changes to commit"
                   git push https://${{ github.actor }}:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git HEAD:develop
