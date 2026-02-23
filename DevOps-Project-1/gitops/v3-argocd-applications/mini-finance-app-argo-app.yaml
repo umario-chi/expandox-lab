@@ -6,7 +6,7 @@ metadata:
 spec:
     project: finance-apps
     source:
-        repoURL: https://github.com/lakunzy7/expandox-lab.git
+        repoURL: https://github.com/umario-chi/expandox-lab.git
         targetRevision: main
         path: DevOps-Project-1/gitops/v3-argocd-applications/mini-finance-app
     destination:
