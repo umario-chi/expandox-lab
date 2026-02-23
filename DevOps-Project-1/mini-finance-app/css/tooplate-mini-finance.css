@@ -479,7 +479,7 @@ strong {
 
 #sidebarMenu .nav-link.active,
 #sidebarMenu .nav-link:hover {
-    background: green;
+    background: red;
     color: var(--white-color);
 }
 
